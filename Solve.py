@@ -32,7 +32,8 @@ no_of_dimensions = np.size( sim.Domain.Domain_length )
 
 
 # Calculate and output solver spatial resolution
-Element_Length = np.ones(no_of_dimensions) * speed_of_light / [(sim.InputFrequency.frequency * sim.GridSettings.Elements_per_Wavelength )]       # Calcualtes the wavelength of the input frequency, sizing the Element to match
+# Calcualtes the wavelength of the input frequency, sizing the Element to match
+Element_Length = np.ones(no_of_dimensions) * speed_of_light / [(sim.InputFrequency.frequency * sim.GridSettings.Elements_per_Wavelength )]       
 no_of_elements = ( sim.Domain.Domain_length / Element_Length ).astype(int)             # Rounds the number of elements to an integer to approximate the domain size
 print("Element Length: {}".format(Element_Length))
 print("Number of Elements: {}".format(no_of_elements))
@@ -251,131 +252,8 @@ for t in range(3,no_of_timesteps):
         A[index].Calculate(t)
 
 
+E_field = np.array([elem.E[:] for index, elem in np.ndenumerate(A)])
+B_field = np.array([elem.B[:] for index, elem in np.ndenumerate(A)])
 
-# Calcualte Gain
-
-# This is to check stability of calculation.
-# Ideally, should approximate peaks and troughs at each wave in time
-gain = lambda t,x,y: (A[x,y].E[t][0] / A[x,y].E[t-1][0])
-print_gain = lambda t,x,y:print("{} \n".format(gain(t,x,y)) )
-
-rng = [10,no_of_timesteps-10]
-x = 2
-y = 1
-
-res = [gain(i,x,y) for i in range(rng[0], rng[1])]
-
-mp.pyplot.figure(figsize = (20,10))
-mp.pyplot.axis([0, rng[1], 0, res[0] ])
-mp.pyplot.plot(range(rng[0], rng[1]), res)
-
-test1 = np.array([i+1 for i in range(rng[0],rng[1])])
-mp.pyplot.plot(test1, np.e**(-test1*alpha) +3.5)
-
-print_gain(rng[0],x,y)
-print_gain(rng[1],x,y)
-
-print_gain(30,x,y)
-
-
-
-# Plot the E field in time for each element for 1D Domain
-if no_of_dimensions == 1:
-    t_steps = 5         # number of timesteps between plotted curves
-    for t in range(0,int(no_of_timesteps/40), t_steps):
-        mp.pyplot.figure(figsize = (20,10))
-        mp.pyplot.axis([0,xelements, -2,2])
-        Es = [elem.E[t] for elem in A]
-        plot(range(0,len(A)), Es)
-
-
-# Plot the E Field for rows of elements at column intervals
-if no_of_dimensions > 1:
-
-    xelements = no_of_elements[0]       # number of elements in row to plot
-    yelements = no_of_elements[1]       # number of rows in column to plot
-    plots = 5                           # number of plots
-    timestep_min = 0                
-    timestep_max = no_of_timesteps
-
-    for plt in range(plots):
-
-        y_axis_to_plot = int(plt*yelements/plots)
-        mp.pyplot.figure(figsize = (20,10))
-        mp.pyplot.axis([0,xelements, -2,2])
-
-        
-
-        for indices, element in np.ndenumerate( A[0:xelements, y_axis_to_plot] ):
-            mp.pyplot.plot(range(timestep_min,timestep_max ), element.E[timestep_min:timestep_max], label = indices)
-            mp.pyplot.title("Y_Elements = {0}".format(y_axis_to_plot))
-        mp.pyplot.legend()
-
-
-# Calculate magnitude of E_field
-
-E_field = np.array([np.zeros(np.shape(A)) for t in range(no_of_timesteps)])     # Initialise array
-
-for t in range(no_of_timesteps):    
-    for index, elem in np.ndenumerate(E_field[t,:,:]):
-        E_field[t][index] = sum(np.round_((A[index].E[t]),decimals = 10))       # Rounded to avoid overflow/underflow errors when summing E-field components
-
-E_field.astype(np.float32)          # Reduce the size of the matrix in memory, to speed up plotting and animation
-        
-print(E_field[20])      # Print value, for checks
-
-
-
-
-def time_varying_contour(x):
-    ''' Plot a contour at the given timestep. '''
-    mp.pyplot.figure(figsize = (20,10))
-    the_contourf = mp.pyplot.contour(E_field[x])
-    mp.pyplot.colorbar()
-    
-
-
-
-
-from mpl_toolkits.mplot3d import Axes3D
-
-coordinates_x = np.array([elem.coordinates[0] for index,elem in np.ndenumerate(A)]).reshape(no_of_elements)
-coordinates_y = np.array([elem.coordinates[1] for index, elem in np.ndenumerate(A)]).reshape(no_of_elements)
-
-    
-def time_varying_3d_contour(t):
-    ''' Creates a countour plot at time t, of the E_field, and coordiantes grid. '''
-    fig = mp.pyplot.figure(figsize = (20,10))
-    ax = mp.pyplot.gcf().add_subplot(1,1,1, projection = '3d')
-    ax.view_init(30,-35)
-    the_contourf = ax.plot_surface( coordinates_x, coordinates_y, E_field[t])
-    
-
-    
-
-def manual(t = 0, elevation = 30, azimuth = 30):
-    ''' Plots the contour at a specific elevationa nd azimuth '''
-    fig = mp.pyplot.figure(figsize = (20,10))
-    ax = fig.add_subplot(1,1,1,projection = '3d')
-    ax.view_init(elevation,azimuth)
-    the_contourf = ax.plot_surface( coordinates_x, coordinates_y, E_field[t])
-    
-
-
-# Create Animated E-field plot.
-
-fig = mp.pyplot.figure(figsize = (10,5))
-ax = mp.pyplot.gcf().add_subplot(1,1,1,projection = '3d')
-ax.view_init(60,-60)
-ax.set_zlim(-0.125, 0.125)
-surface = ax.plot_surface( coordinates_x, coordinates_y, E_field[0], cmap = mp.cm.plasma)
-
-
-def animate_t(t):
-    ax.cla()
-    surface = ax.plot_surface( coordinates_x, coordinates_y, E_field[t], cmap = mp.cm.plasma)
-    ax.set_zlim(-0.25, 0.25)
-    
-        
-ani = mp.animation.FuncAnimation(fig, animate_t, np.arange(10,no_of_timesteps,1),  interval = 1)
+np.save("Res", np.array([E_field, B_field]))
 
