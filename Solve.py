@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib as mp
 from matplotlib.pyplot import plot
 from matplotlib import animation
+from Wave_Eqn_Class_Defs import *
 
 from Pre_Processor import Simulation
 
@@ -43,174 +44,10 @@ speed_of_light_squared_x_timestep_sq = (sim.speed_of_light**2) * (sim.timestep_s
 
 
 
-
-class BaseElement():
-    '''
-    Base class for all Elemenets to inherit from
-    '''
-    Last_ID = 0             # ID to identify each element
-    def __init__(self, coords, length):
-        
-        # Element IDs
-        BaseElement.Last_ID += 1        
-        self.ID = BaseElement.Last_ID
-        
-        # Coordinates
-        self.coordinates = coords
-        self.length = length
-        self.reciprocal_length = 1/self.length      # pre-calculated to speed up calculations
-        
-        # Electromagnetic Properties
-        self.E = np.array([sim.Initial_E for i in range(sim.no_of_timesteps)])  # empty solution array, size: (cartesian vector by timesteps)
-        self.B = np.array([sim.Initial_B for i in range(sim.no_of_timesteps)])
-        
-        self.positive_neighbours = np.array([None for i in range(sim.no_of_dimensions)], dtype = object)    # empty array to hold neighbouring elements (+ve direction along each axis)
-        self.negative_neighbours = self.positive_neighbours.copy()              # Similar for -ve direction in each axis.
-        
-        
-    def link(self, elem, direction):
-        '''
-        Links two elements for calculations.
-        Directions are to be specified as: [x+, y+, z+]
-        '''
-        self.positive_neighbours[direction] = elem  
-        elem.negative_neighbours[direction] = self
-    
-
-
-
-class BoundaryElement(BaseElement):
-    '''
-    Element with pre-determined values through time
-    '''
-    def __init__(self, coords, length):
-        BaseElement.__init__(self, coords, length)
-
-    def SetE(self, direction, E_Array):
-        ''' Takes an array of Eelectric field in a given direction and sets the element value to that throughout the simualtion.
-        '''
-        self.E[:,direction] = E_Array
-    
-    def SetB(self, direction, B_Array):
-        ''' Takes an array of MAgnetic field in a given direction and sets the element value to that throughout the simualtion.
-        '''
-        self.B[:][direction] = B_Array 
-        
-    def Calculate(self, timestep_to_calculate):
-        ''' Does nothing for a boundary element - values should be already calculated.
-        '''
-        pass    
-
-
-
-class Element(BaseElement):
-    '''
-    Element to be solved in the simulation
-    '''
-    def __init__(self, coords, length):
-        BaseElement.__init__(self, coords, length)
-        self.LastSolvedTimestep = 1
-        
-        
-        
-    def Calculate(self, timestep_to_calculate):
-        
-        # re-define for shorter syntax
-        t = timestep_to_calculate
-        prev_t =  t-1
-
-        # initialises gradient matrices
-        dEdt2 = np.zeros(np.shape(sim.Initial_E))
-        dBdt2 = np.zeros(np.shape(sim.Initial_B))
-        
-        for dim in range(sim.no_of_dimensions):
-
-            # Calculate Spatial Derivatives
-            # These these are evaluated at the element boundary - ie/ the mid-point between the two elements.
-            forward_derivatives_E = (self.positive_neighbours[dim].E[prev_t] - self.E[prev_t]) * self.reciprocal_length
-            backward_derivatives_E = ( - self.negative_neighbours[dim].E[prev_t] + self.E[prev_t]) * self.reciprocal_length
-            forward_derivatives_B = (self.positive_neighbours[dim].B[prev_t] - self.B[prev_t]) * self.reciprocal_length
-            backward_derivatives_B = ( - self.negative_neighbours[dim].B[prev_t] + self.B[prev_t]) * self.reciprocal_length
-            
-            # Calculate Second time gradient
-            # Evaluated across the current element - ie/ between the two boundaries.
-            dEdt2 += speed_of_light_squared_x_timestep_sq * (forward_derivatives_E - backward_derivatives_E) * self.reciprocal_length
-            dBdt2 += speed_of_light_squared_x_timestep_sq * (forward_derivatives_B - backward_derivatives_B) * self.reciprocal_length
-            
-               
-        # Calculate New E and B values for the timestep
-        # Derived from Taylor expansion
-        self.E[t] = dEdt2 + 2*self.E[prev_t] - self.E[t-2]
-        self.B[t] = dBdt2 + 2*self.B[prev_t] - self.B[t-2]
-                
-       
-
-
-def Element_Array_builder():
-    '''
-    Builds an Element array of elements ready to calculate.
-    Creates and populates an array of coordiantes.
-    Creates a mask array to select boundary elements at the edges, using the highest and lowest domain values.
-        (only valid for linear, square, cube, etc. domains.)
-    Creates an array of elements, then set relevant elements as boundary elements. 
-    '''
-    # Create Coordinate Array as an array of X-coordiante, Y-Coordinate and Z-Coordinate grids of element x element
-    Coordinate_Array = np.array([np.ones(sim.no_of_elements) for dim in range(sim.no_of_dimensions)])
-
-    # Populate the Coordinate matrix, assuming constant Element Length
-    for dim in range (sim.no_of_dimensions):
-        axis = Coordinate_Array[dim]
-        for indices, point in np.ndenumerate(axis):
-                axis[indices] = sim.Element_Length[dim] * indices[dim]
-
-    # Assume maximum and minimum values - used to determine boundary elements
-    Min_vals = np.zeros(sim.no_of_dimensions)
-    Max_vals = sim.Element_Length*(sim.no_of_elements-1)
-    
-    
-    # Create a Boundary Element mask array
-    Boundary_Array = np.zeros(sim.no_of_elements, dtype = bool)
-    for dim in range(sim.no_of_dimensions):
-        Boundary_Array += (Coordinate_Array[dim] == Min_vals[dim]) + (Coordinate_Array[dim] == Max_vals[dim])
-
-    # Initialise the Element Array
-    Element_Array = np.empty(sim.no_of_elements , dtype = object)
-    
-    # Populate the Element Array with either Boundary Elements or regular Elements, using the Boundary_Array mask
-    for indices, coords in np.ndenumerate(Boundary_Array):
-        
-        # Gather the coordinates for the Element
-        coordinates = np.zeros(sim.no_of_dimensions)
-        for dim in range(sim.no_of_dimensions):
-            coordinates[dim] = Coordinate_Array[dim][indices]
-        if Boundary_Array[indices]:
-            Element_Array[indices] = BoundaryElement(coordinates, sim.Element_Length)
-        else:
-            Element_Array[indices] = Element(coordinates, sim.Element_Length)
-
-
-    
-    # Link elements
-    # Iterate through all elements and link each one with the one ahead.
-    # The link fucntion is symmetric, so the element ahead's negative neighbour will be set to the one behind.
-    for index, elem in np.ndenumerate(Element_Array):
-        for dim in range(sim.no_of_dimensions):
-            if index[dim] == sim.no_of_elements[dim]-1:
-                continue
-            neighbour_index = list(index)   #Get the index of the current element
-            neighbour_index[dim] += 1       # increment it to get the next element in current axis
-            neighbour_index = tuple(neighbour_index)    # make it a tuple to use it as an index
-            elem.link(Element_Array[neighbour_index], dim)      # Link the current element with the one at the neighbour index.
-
-        
-    return Element_Array
-
-
-
 # Test
 
 # Create Array
-A = Element_Array_builder()
+A = Element_Array_builder(sim)
 
 # Setup Boundary conditions - input pulse
 A[0, 1 ].SetE(0 ,input_function)
