@@ -4,20 +4,11 @@ A program to Solve the Electromagnetic Wave Equation in a closed domain.
 '''
 
 
-
-
 import numpy as np
 import matplotlib as mp
 from matplotlib.pyplot import plot
 from matplotlib import animation
 from Wave_Eqn_Class_Defs import *
-
-from Pre_Processor import Simulation
-
-
-# Used for debugging of numerical errors
-import pdb
-np.seterr(all='raise')
 
 
 
@@ -29,19 +20,10 @@ sim = np.load(input_file_name).item(0)
 
 
 
-
 # Create input function
-input_function = np.array([np.sin(2*np.pi* sim.InputFrequency.frequency * sim.timestep_size*t) for t in range(sim.InputFrequency.input_duration)], np.double)
 # Creates a sine wave of the input function
+input_function = np.array([np.sin(2*np.pi* sim.InputFrequency.frequency * sim.timestep_size*t) for t in range(sim.InputFrequency.input_duration)], np.double)
 input_function.resize(sim.no_of_timesteps)                  # Resize the array to match the simulation size, adding zeros where appropriate to indicate no signal.
-
-
-
-# pre-compute constant variables to reduce solve time
-speed_of_light_squared_x_timestep_sq = (sim.speed_of_light**2) * (sim.timestep_size**2)
-# pre-calculated alpha woithout the element length term, which is added later in the individual element. 
-
-
 
 
 # Test
@@ -60,7 +42,10 @@ for t in range(3,sim.no_of_timesteps):
 
 
 E_field = np.array([elem.E[:] for index, elem in np.ndenumerate(A)])
+E_field = E_field.reshape(*sim.no_of_elements, sim.no_of_timesteps, sim.no_of_dimensions)
 B_field = np.array([elem.B[:] for index, elem in np.ndenumerate(A)])
+B_field = B_field.reshape(*sim.no_of_elements, sim.no_of_timesteps, sim.no_of_dimensions)
+
 
 np.save("Res", np.array([E_field, B_field]))
 
