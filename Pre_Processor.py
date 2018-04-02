@@ -3,9 +3,6 @@
 A program to Solve the Electromagnetic Wave Equation in a closed domain.
 '''
 
-
-import numpy as np
-import matplotlib.pyplot as plt
 from Wave_Eqn_Class_Defs import *
 
 
@@ -33,7 +30,9 @@ in_f = InputFrequency(frequency, input_duration)
 Elements_per_Wavelength = 14        # Based on input wavelength
 TimeSteps_per_Wavelength = 25
 
-grid = GridSettings(Elements_per_Wavelength, TimeSteps_per_Wavelength)
+
+
+grid = GridSettings(Elements_per_Wavelength)
 
 
 sim = Simulation(dom, in_f, grid)

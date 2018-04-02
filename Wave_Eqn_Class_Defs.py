@@ -32,10 +32,10 @@ class InputFrequency:
 
 class GridSettings:
     ''' A Class to contain the settings for the Grid to be used. As these will mostly be numeric parameters, they have default values.'''
-    def __init__(self, Elements_Per_WaveLength = 14, Elements_Per_Timestep = 25):
+    def __init__(self, Elements_Per_WaveLength = 14, Elements_Per_Timestep = None):
         self.Elements_per_Wavelength = Elements_Per_WaveLength
         self.TimeSteps_per_Wavelength = Elements_Per_Timestep
-
+        
 
 
 
@@ -60,8 +60,9 @@ class Simulation():
         self.no_of_elements = ( self.Domain.Domain_length / self.Element_Length ).astype(int)
 
         # Calculate and output solver time resolution
-        self.timestep_size = 1/(self.InputFrequency.frequency * self.GridSettings.TimeSteps_per_Wavelength )              # Sizes the timesteps as desired
-        self.no_of_timesteps = int(self.Domain.Simulation_Duration / self.timestep_size)            # rounds the number of timesteps
+        self.timestep_size = self.Auto_Calculate_Timestep()
+        # rounds the number of timesteps
+        self.no_of_timesteps = int(self.Domain.Simulation_Duration / self.timestep_size)            
         
         # Calculate and output solver stability checks
         self.alpha = (self.speed_of_light * self.timestep_size) **2 / sum(self.Element_Length)**2
@@ -76,7 +77,36 @@ class Simulation():
         self.Initial_B = self.cartesian_vector
 
 
+
+    def Auto_Calculate_Timestep (self):
+        '''
+        Calculates the maximum allowable timestep size for both a stable simulation
+        and to accurately capture the frequencies expected.
+        If the user has specified a higher accuracy, then use that instead.
+        Returns: Timestep size
+        '''
         
+        c = 3*10**8     # Speed of light in a vacuum
+        # Maximum allowable alpha
+        max_alpha = 0.5 / self.no_of_dimensions
+        # Calculate stable minimum timestep from max_alpha
+        stable_timestep = (max_alpha * self.GridSettings.Elements_per_Wavelength ** 2 / c ** 2) ** 0.5
+
+        
+        # Get Max frequency, and double it to account for reflections, then by 6 to accurately capture a full waveform.
+        max_F = self.InputFrequency.frequency * 2 * 6
+        # Calculate an accurate timestep
+        accurate_timestep = 1 / max_F
+
+        # If the user has provided a resolution, calcualte the timestep size
+        if self.GridSettings.TimeSteps_per_Wavelength is not None:
+            user_timestep = 1/(self.InputFrequency.frequency * self.GridSettings.TimeSteps_per_Wavelength)
+        else:
+            user_timestep = np.inf
+        
+
+        return min([stable_timestep, accurate_timestep, user_timestep])
+                
                 
     def save(self, filename):
         ''' Saves the input file in the given filename in the current directory '''

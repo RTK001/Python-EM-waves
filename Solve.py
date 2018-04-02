@@ -3,11 +3,6 @@
 A program to Solve the Electromagnetic Wave Equation in a closed domain.
 '''
 
-
-import numpy as np
-import matplotlib as mp
-from matplotlib.pyplot import plot
-from matplotlib import animation
 from Wave_Eqn_Class_Defs import *
 
 
